@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>朝霞·晚霞概率预测</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1026">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="霞光预测">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root{
+    --bg1:#0b1026; --bg2:#1a2151; --card:rgba(255,255,255,.07);
+    --border:rgba(255,255,255,.12); --text:#eef1ff; --sub:#9aa3c7;
+    --red:#ff6b5e; --gold:#ffb347; --blue:#5ea0ff; --green:#5dd39e;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background:linear-gradient(180deg,var(--bg1),var(--bg2) 60%,#2b1a4a);
+    color:var(--text);min-height:100vh;
+  }
+  .stars{position:fixed;inset:0;pointer-events:none;opacity:.5}
+  .container{max-width:860px;margin:0 auto;padding:24px 16px 60px}
+  header{text-align:center;padding:28px 0 8px}
+  header h1{font-size:28px;letter-spacing:2px;font-weight:700;
+    background:linear-gradient(90deg,#ffb347,#ff6b5e,#5ea0ff);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  header p{color:var(--sub);font-size:13px;margin-top:8px}
+
+  /* 城市筛选 */
+  .city-bar{display:flex;gap:10px;margin:20px 0 6px}
+  .search-wrap{position:relative;flex:1}
+  .search-wrap input{
+    width:100%;padding:12px 16px;border-radius:14px;border:1px solid var(--border);
+    background:var(--card);color:var(--text);font-size:15px;outline:none;
+    backdrop-filter:blur(6px);
+  }
+  .search-wrap input:focus{border-color:var(--gold)}
+  .search-wrap input::placeholder{color:#7c86ad}
+  .btn-geo{padding:12px 16px;border-radius:14px;border:1px solid var(--border);
+    background:var(--card);color:var(--text);cursor:pointer;font-size:14px;white-space:nowrap}
+  .btn-geo:hover{background:rgba(255,255,255,.14)}
+  .dropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:50;
+    background:#171e3e;border:1px solid var(--border);border-radius:14px;overflow:hidden;
+    max-height:260px;overflow-y:auto;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .dropdown div{padding:11px 16px;cursor:pointer;font-size:14px;display:flex;justify-content:space-between}
+  .dropdown div:hover{background:rgba(255,179,71,.18)}
+  .dropdown .adm{color:var(--sub);font-size:12px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+  .chip{padding:7px 14px;border-radius:999px;border:1px solid var(--border);
+    background:var(--card);color:var(--text);font-size:13px;cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--gold);color:var(--gold)}
+  .chip.active{background:linear-gradient(90deg,#ff6b5e,#ffb347);border-color:transparent;color:#fff;font-weight:600}
+
+  /* 天气摘要 */
+  .loc-summary{text-align:center;margin:14px 0 6px;color:var(--sub);font-size:13px;line-height:1.7}
+  .loc-summary b{color:var(--text);font-size:16px}
+
+  /* 图例 */
+  .legend{display:flex;gap:14px;justify-content:center;margin:10px 0 20px;flex-wrap:wrap}
+  .legend span{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:5px}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  .day-group{margin-bottom:26px}
+  .day-title{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text);display:flex;align-items:center;gap:10px}
+  .day-title::after{content:"";flex:1;height:1px;background:var(--border)}
+  .day-title .sun-time{font-size:12px;color:var(--sub);font-weight:400}
+
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:620px){.cards{grid-template-columns:1fr}}
+  .card{border-radius:18px;padding:18px;border:1px solid var(--border);position:relative;overflow:hidden;
+    background:var(--card);backdrop-filter:blur(6px)}
+  .card .glow-bg{position:absolute;inset:0;opacity:.16;pointer-events:none;transition:.4s}
+  .card h3{font-size:16px;display:flex;align-items:center;gap:8px;position:relative}
+  .prob-row{display:flex;align-items:flex-end;gap:14px;margin:12px 0;position:relative}
+  .prob-num{font-size:46px;font-weight:800;line-height:1}
+  .prob-num small{font-size:16px;font-weight:600}
+  .level-tag{padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;margin-bottom:6px}
+  .ring{width:58px;height:58px;flex-shrink:0;margin-left:auto}
+  .factors{font-size:12.5px;line-height:2;position:relative;color:#cdd4f2}
+  .factors .ok{color:var(--green)} .factors .bad{color:var(--red)} .factors .mid{color:var(--gold)}
+  .advice{margin-top:10px;padding:9px 12px;border-radius:10px;background:rgba(255,255,255,.06);
+    font-size:12.5px;color:var(--sub);line-height:1.7;position:relative}
+
+  .loading{text-align:center;padding:60px 0;color:var(--sub)}
+  .spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--gold);
+    border-radius:50%;margin:0 auto 14px;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .error-box{background:rgba(255,107,94,.15);border:1px solid rgba(255,107,94,.4);
+    border-radius:14px;padding:16px;margin:20px 0;font-size:14px;line-height:1.8}
+
+  footer{margin-top:40px;color:#6b74a0;font-size:12px;line-height:1.9;text-align:center;
+    border-top:1px solid var(--border);padding-top:18px}
+  footer b{color:var(--sub)}
+</style>
+</head>
+<body>
+<canvas class="stars" id="stars"></canvas>
+<div class="container">
+  <header>
+    <h1>🌅 朝霞 · 晚霞概率预测 🌇</h1>
+    <p>基于真实数值气象预报（云量分层 / 湿度 / 能见度 / 降水）的多因子概率模型</p>
+  </header>
+
+  <div class="city-bar">
+    <div class="search-wrap">
+      <input id="cityInput" placeholder="搜索城市，如：杭州、昆明、敦煌…" autocomplete="off">
+      <div class="dropdown" id="dropdown" style="display:none"></div>
+    </div>
+    <button class="btn-geo" id="geoBtn">📍 我的位置</button>
+  </div>
+  <div class="chips" id="chips"></div>
+
+  <div class="loc-summary" id="summary"></div>
+  <div class="legend">
+    <span><i class="dot" style="background:#5dd39e"></i>≥60% 值得蹲</span>
+    <span><i class="dot" style="background:#ffb347"></i>40–60% 有机会</span>
+    <span><i class="dot" style="background:#ff6b5e"></i>&lt;40% 大概率没有</span>
+  </div>
+
+  <div id="content"><div class="loading"><div class="spinner"></div>正在加载气象数据…</div></div>
+
+  <footer>
+    <b>预测模型说明</b><br>
+    晚霞/朝霞出现的核心条件：日出日落前后 1 小时内存在中高云（高云染色艳丽、中云最易出大片、低云遮挡则失败）、
+    空气湿度适中、能见度好、无降水。模型综合 6 个预报因子加权评分并叠加云量变化趋势修正，
+    输出为「条件满足度概率」，<b>提前 24 小时内参考价值最高，72 小时外仅供趋势参考</b>。<br>
+    数据来源：Open-Meteo（ECMWF/GFS 数值预报）· 免费开源气象接口
+  </footer>
+</div>
+
+<script>
+// ================= 城市预设 =================
+const PRESET = ["北京","上海","广州","深圳","杭州","成都","重庆","西安","南京","武汉",
+  "长沙","厦门","青岛","三亚","昆明","大理","拉萨","敦煌","哈尔滨","乌鲁木齐","西宁","呼伦贝尔"];
+
+// ================= 星空背景 =================
+(function(){
+  const c=document.getElementById("stars"),x=c.getContext("2d");
+  function draw(){c.width=innerWidth;c.height=innerHeight;x.clearRect(0,0,c.width,c.height);
+    for(let i=0;i<120;i++){x.globalAlpha=Math.random()*.7+.1;x.fillStyle="#fff";
+      x.fillRect(Math.random()*c.width,Math.random()*c.height,Math.random()<.15?2:1,1);}}
+  draw();addEventListener("resize",draw);
+})();
+
+// ================= 概率模型 =================
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+// 1) 总云量：25–65% 最容易出霞，过少无反射物，过多被遮蔽
+function scoreCloudCover(cc){
+  if(cc<=10) return 5+cc*0.5;
+  if(cc<=25) return 10+(cc-10)/15*60;
+  if(cc<=65) return 70+(cc-25)/40*30;
+  if(cc<=88) return 100-(cc-65)/23*70;
+  return clamp(30-(cc-88)/12*28,2,30);
+}
+// 2) 云层构成：高云(卷云)染色艳 0.9 / 中云最佳 1.0 / 低云遮挡 0.25
+function scoreCloudType(high,mid,low,total){
+  if(total<12) return 55; // 基本无云，给中性偏低分
+  const ratio=(high*0.9+mid*1.0+low*0.25)/Math.max(total,1);
+  return clamp((ratio-0.25)/0.75*90+10,5,100);
+}
+// 3) 降水：下雨基本没霞
+function scorePrecip(pp,mm){
+  let s=100-pp*0.85;
+  if(mm>0.1) s-=20; if(mm>1) s-=15;
+  return clamp(s,0,100);
+}
+// 4) 湿度：45% 左右最佳，>85% 阴霾化
+function scoreHumidity(rh){
+  return clamp(100*Math.exp(-Math.pow(rh-45,2)/(2*25*25)),5,100);
+}
+// 5) 能见度
+function scoreVis(v){
+  if(v==null) return null;
+  if(v>=20000) return 100;
+  if(v>=10000) return 60+(v-10000)/10000*40;
+  if(v>=5000)  return 30+(v-5000)/5000*30;
+  if(v>=2000)  return 10+(v-2000)/3000*20;
+  return 5;
+}
+// 6) 风速：狂风时云移动太快
+function scoreWind(w){
+  if(w<=25) return 100;
+  if(w<=40) return 100-(w-25)/15*40;
+  return clamp(60-(w-40)*2,20,60);
+}
+
+const WEIGHTS={cc:.34,ctype:.24,precip:.16,rh:.11,vis:.10,wind:.05};
+
+function evaluate(hourly,idx){ // idx 为事件所在小时在 hourly 数组中的下标
+  const pick=i=>idx+i>=0&&idx+i<hourly.time.length?idx+i:idx;
+  const i0=pick(-1),i1=pick(0),i2=pick(1);
+  const avg=(arr,w)=>arr[i0]*w[0]+arr[i1]*w[1]+arr[i2]*w[2];
+  const w=[.25,.5,.25];
+  const cc=avg(hourly.cloud_cover,w), high=avg(hourly.cloud_cover_high,w),
+        mid=avg(hourly.cloud_cover_mid,w), low=avg(hourly.cloud_cover_low,w),
+        pp=avg(hourly.precipitation_probability,w), rh=avg(hourly.relative_humidity_2m,w),
+        mm=avg(hourly.precipitation,w), wind=avg(hourly.wind_speed_10m,w);
+  const visArr=hourly.visibility, vis=visArr?avg(visArr,w):null;
+
+  const s={cc:scoreCloudCover(cc),ctype:scoreCloudType(high,mid,low,cc),
+    precip:scorePrecip(pp,mm),rh:scoreHumidity(rh),vis:scoreVis(vis),wind:scoreWind(wind)};
+
+  let sum=0,wt=0;
+  for(const k in WEIGHTS){if(s[k]!=null){sum+=s[k]*WEIGHTS[k];wt+=WEIGHTS[k];}}
+  let score=sum/wt;
+
+  // 趋势修正：临近事件云量转晴(烧霞)加分，云量快速增厚减分
+  const c0=hourly.cloud_cover[i0],c2=hourly.cloud_cover[i2];
+  if(c2<c0-18) score+=5; else if(c2>c0+18) score-=4;
+  // 极端条件校准：湿度>85% 空气灰霾化，霞色会明显变淡
+  if(rh>=90) score*=0.75; else if(rh>=85) score*=0.85;
+  // 低云全覆盖（层云/雾）会彻底挡住阳光
+  if(low>65) score*=0.7;
+  return {score:Math.round(score),f:{cc,high,mid,low,pp,rh,mm,vis,wind,s}};
+}
+
+function levelOf(score){
+  if(score>=72) return {t:"极佳 🔥",c:"#5dd39e",advice:"强烈建议出门！提前 20 分钟到视野开阔处（江边/湖边/山顶最佳），东侧（朝霞）或西侧（晚霞）无高楼遮挡的位置。"};
+  if(score>=55) return {t:"值得蹲 ✨",c:"#8fd3ff",advice:"条件不错，值得蹲守。若天空为絮状/鱼鳞状云（卷云、高积云），出大片概率更高。"};
+  if(score>=38) return {t:"有机会 🌤",c:"#ffb347",advice:"条件一般，可顺路蹲一下，不建议专程跑远。留意日落前 30 分钟云缝变化。"};
+  if(score>=22) return {t:"偏弱 ☁️",c:"#ff9f6e",advice:"云况或空气条件不太配合，大概率只有微弱霞光。"};
+  return {t:"基本没有 😴",c:"#ff6b5e",advice:"天空状况不利于出现朝晚霞（无云/全阴/降水），可以安心安排别的事。"};
+}
+
+function fmtVal(f){
+  const mk=(ok,bad,mid,txt)=>({cls:ok?"ok":bad?"bad":"mid",txt});
+  const list=[];
+  list.push(mk(f.s.cc>=60,f.s.cc<35,f.s.cc>=35,`云量 ${Math.round(f.cc)}% ${f.s.cc>=60?"✓理想区间":f.cc>88?"·接近全阴":f.cc<12?"·天空基本无云":"·尚可"}`));
+  const qt=f.s.ctype; list.push(mk(qt>=65,qt<40,qt>=40,`云层 高${Math.round(f.high)}/中${Math.round(f.mid)}/低${Math.round(f.low)}% ${qt>=65?"·中高云为主,易染色":f.low>f.mid+f.high?"·低云为主,易遮挡":"·构成一般"}`));
+  list.push(mk(f.pp<25,f.pp>=55,f.pp>=25,`降水概率 ${Math.round(f.pp)}% ${f.pp<25?"✓无雨干扰":f.pp>=55?"·可能下雨":"·有降雨风险"}`));
+  list.push(mk(f.rh<65&&f.rh>25,f.rh>=85,f.rh>=65,`湿度 ${Math.round(f.rh)}% ${f.rh>=85?"·湿度过高易灰蒙":f.rh<25?"·较干燥":"✓适中"}`));
+  if(f.vis!=null){const vkm=f.vis/1000;
+    list.push(mk(vkm>=15,vkm<6,vkm>=6,`能见度 ${vkm>=20?"20+":vkm.toFixed(1)}km ${vkm>=15?"✓通透":vkm<6?"·较差,霞色发灰":"·一般"}`));}
+  list.push(mk(f.wind<30,f.wind>40,f.wind>=30,`风速 ${Math.round(f.wind)}km/h ${f.wind>40?"·风大云散得快":"✓平稳"}`));
+  return list;
+}
+
+// ================= 数据获取 =================
+async function fetchWeather(lat,lon){
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
+    `&hourly=cloud_cover,cloud_cover_high,cloud_cover_mid,cloud_cover_low,visibility,relative_humidity_2m,precipitation_probability,precipitation,wind_speed_10m`+
+    `&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&forecast_days=6&timezone=auto`;
+  const r=await fetch(u); if(!r.ok) throw new Error("气象接口请求失败");
+  return r.json();
+}
+async function geocode(name){
+  const u=`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&language=zh&format=json`;
+  const r=await fetch(u); if(!r.ok) throw new Error("地理编码失败");
+  return (await r.json()).results||[];
+}
+
+// ================= 渲染 =================
+const state={name:null,lat:null,lon:null,data:null};
+
+function render(){
+  const d=state.data,c=document.getElementById("content");
+  document.getElementById("summary").innerHTML=
+    `<b>${state.name}</b><br>今日 ${Math.round(d.daily.temperature_2m_min[0])}°C ~ ${Math.round(d.daily.temperature_2m_max[0])}°C · 时区 ${d.timezone}`;
+  let html="";
+  for(let day=0;day<d.daily.time.length;day++){
+    const date=new Date(d.daily.time[day]+"T12:00");
+    const wd="周"+"日一二三四五六"[date.getDay()];
+    const label=day===0?"今天":day===1?"明天":`${date.getMonth()+1}月${date.getDate()}日`;
+    html+=`<div class="day-group"><div class="day-title">${label} ${wd}
+      <span class="sun-time">☀️升 ${d.daily.sunrise[day].slice(11,16)} · 落 ${d.daily.sunset[day].slice(11,16)}</span></div><div class="cards">`;
+    // 朝霞
+    const sr=new Date(d.daily.sunrise[day]);
+    const idxM=d.hourly.time.findIndex(t=>t===d.daily.sunrise[day].slice(0,13)+":00");
+    html+=eventCard("🌅 朝霞",evaluate(d.hourly,idxM),`${String(sr.getHours()).padStart(2,"0")}:${String(sr.getMinutes()).padStart(2,"0")} 前后`);
+    // 晚霞
+    const ss=new Date(d.daily.sunset[day]);
+    const idxE=d.hourly.time.findIndex(t=>t===d.daily.sunset[day].slice(0,13)+":00");
+    html+=eventCard("🌇 晚霞",evaluate(d.hourly,idxE),`${String(ss.getHours()).padStart(2,"0")}:${String(ss.getMinutes()).padStart(2,"0")} 前后`);
+    html+=`</div></div>`;
+  }
+  c.innerHTML=html;
+}
+
+function eventCard(title,ev,time){
+  const lv=levelOf(ev.score),f=ev.f;
+  const ring=`<svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4"/>
+    <circle cx="20" cy="20" r="17" fill="none" stroke="${lv.c}" stroke-width="4" stroke-linecap="round"
+    stroke-dasharray="${ev.score/100*106.8} 106.8" transform="rotate(-90 20 20)"/></svg>`;
+  const grads=["#ff6b5e","#8fd3ff","#5dd39e","#ffb347"];
+  const bg=`background:linear-gradient(135deg,${lv.c},transparent 70%)`;
+  const facts=fmtVal(f).map(x=>`<div class="${x.cls}">${x.txt}</div>`).join("");
+  return `<div class="card"><div class="glow-bg" style="${bg}"></div>
+    <h3>${title}</h3>
+    <div class="prob-row"><div class="prob-num" style="color:${lv.c}">${ev.score}<small>%</small></div>
+    <div class="level-tag" style="background:${lv.c}33;color:${lv.c};border:1px solid ${lv.c}66">${lv.t}</div>${ring}</div>
+    <div style="font-size:12px;color:var(--sub);position:relative;margin-bottom:8px">最佳观测：${time}</div>
+    <div class="factors">${facts}</div>
+    <div class="advice">💡 ${lv.advice}</div></div>`;
+}
+
+// ================= 城市交互 =================
+const dd=document.getElementById("dropdown");
+async function loadCity(name,lat,lon,displayName){
+  state.name=displayName||name;state.lat=lat;state.lon=lon;
+  document.querySelectorAll(".chip").forEach(el=>el.classList.toggle("active",el.textContent===name));
+  document.getElementById("content").innerHTML='<div class="loading"><div class="spinner"></div>正在获取 '+state.name+' 的气象数据…</div>';
+  document.getElementById("summary").innerHTML="";
+  try{state.data=await fetchWeather(lat,lon);render();}
+  catch(e){document.getElementById("content").innerHTML=
+    `<div class="error-box">⚠️ 数据加载失败：${e.message}<br>请检查网络后重试，或换一个城市。</div>`;}
+}
+
+const input=document.getElementById("cityInput");
+let timer=null;
+input.addEventListener("input",()=>{
+  clearTimeout(timer);
+  const q=input.value.trim();
+  if(!q){dd.style.display="none";return;}
+  timer=setTimeout(async()=>{
+    try{
+      const res=await geocode(q);
+      if(!res.length){dd.innerHTML='<div style="padding:12px;color:#7c86ad;font-size:13px">未找到该城市</div>';dd.style.display="block";return;}
+      dd.innerHTML=res.map(r=>`<div data-lat="${r.latitude}" data-lon="${r.longitude}" data-name="${r.name}">
+        <span>${r.name}</span><span class="adm">${(r.admin1||"")+(r.country&&r.country!=="China"?" · "+r.country:"")}</span></div>`).join("");
+      dd.style.display="block";
+    }catch(e){dd.style.display="none";}
+  },300);
+});
+dd.addEventListener("click",e=>{
+  const item=e.target.closest("[data-lat]");if(!item)return;
+  dd.style.display="none";input.value="";
+  loadCity(item.dataset.name,+item.dataset.lat,+item.dataset.lon);
+});
+document.addEventListener("click",e=>{if(!e.target.closest(".search-wrap"))dd.style.display="none";});
+
+// 我的位置
+document.getElementById("geoBtn").addEventListener("click",()=>{
+  if(!navigator.geolocation){alert("当前环境不支持定位，请搜索城市");return;}
+  navigator.geolocation.getCurrentPosition(
+    p=>loadCity("当前位置",p.coords.latitude,p.coords.longitude),
+    ()=>alert("定位失败或未授权，请手动搜索城市"));
+});
+
+// 预设城市 chips
+const chipBox=document.getElementById("chips");
+async function chipGeo(n,b){
+  try{const r=(await geocode(n))[0];if(!r)return;
+    b.onclick=()=>loadCity(r.name,r.latitude,r.longitude);}
+  catch(e){}
+}
+PRESET.forEach(n=>{const b=document.createElement("button");b.className="chip";b.textContent=n;
+  chipGeo(n,b);chipBox.appendChild(b);});
+
+// 默认加载
+loadCity("北京",39.9042,116.4074);
+
+// PWA：注册 Service Worker（仅 HTTPS 部署环境生效，本地预览自动跳过）
+if("serviceWorker" in navigator && location.protocol==="https:"){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
